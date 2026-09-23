@@ -12,6 +12,7 @@ public class PlayerMovement : MonoBehaviour
     public float dashCooldown = 1f;
     private bool isDashing;
     private bool canDash = true;
+    private Animator anim;
 
     [Header("Combate Básico & Luva")]
     public int attackDamage = 10;
@@ -30,7 +31,7 @@ public class PlayerMovement : MonoBehaviour
     
     [Header("Interface (UI)")]
     public GameObject iconeMacaUI;
-    public GameObject[] coracoesUI; // Array que vai guardar as 3 imagens de coração
+    public GameObject[] coracoesUI;
 
     [Header("Vida do Jogador")]
     public int maxHealth = 3;
@@ -38,13 +39,19 @@ public class PlayerMovement : MonoBehaviour
 
     private Rigidbody rb;
     private Vector3 movementInput;
-    private Vector3 lastDirection = Vector3.forward;
+    // Padrão olhando para a frente (para a câmera) no início do jogo
+    private Vector3 lastDirection = new Vector3(0f, 0f, -1f); 
 
     void Start()
     {
         rb = GetComponent<Rigidbody>();
+        anim = GetComponent<Animator>();
         baseDamage = attackDamage;
         currentHealth = maxHealth;
+
+        // Força a animação inicial a olhar para frente
+        anim.SetFloat("MoveX", 0f);
+        anim.SetFloat("MoveZ", -1f);
     }
 
     void Update()
@@ -53,13 +60,40 @@ public class PlayerMovement : MonoBehaviour
 
         float moveX = Input.GetAxisRaw("Horizontal"); 
         float moveZ = Input.GetAxisRaw("Vertical");
+        
+        // Mantém o movimento físico fluido em todas as direções
         movementInput = new Vector3(moveX, 0f, moveZ).normalized;
 
+        // Lógica Visual e de Animação
         if (movementInput != Vector3.zero)
         {
-            lastDirection = movementInput;
+            // Se estiver andando na diagonal, dá prioridade para a animação lateral.
+            // Isso evita que o Animator trave no meio da Blend Tree.
+            if (Mathf.Abs(moveX) > 0)
+            {
+                lastDirection = new Vector3(Mathf.Sign(moveX), 0f, 0f);
+            }
+            else
+            {
+                lastDirection = new Vector3(0f, 0f, Mathf.Sign(moveZ));
+            }
+
+            // Envia apenas 1, 0 ou -1 para o Animator
+            anim.SetFloat("MoveX", Mathf.Abs(lastDirection.x)); 
+            anim.SetFloat("MoveZ", lastDirection.z);
         }
 
+        // Lógica de Inversão Visual (Flip) baseada na última direção registrada
+        if (lastDirection.x > 0)
+        {
+            transform.localScale = new Vector3(1, 1, 1);
+        }
+        else if (lastDirection.x < 0)
+        {
+            transform.localScale = new Vector3(-1, 1, 1);
+        }
+
+        // Comandos de Ação
         if (Input.GetKeyDown(KeyCode.Space) && canDash && movementInput != Vector3.zero)
             StartCoroutine(DashRoutine());
 
@@ -75,7 +109,7 @@ public class PlayerMovement : MonoBehaviour
         if (Input.GetMouseButtonDown(1) && hasEatenApple)
             ShootPoison();
 
-        // TESTE: Simula o jogador tomando 1 de dano ao apertar a tecla 'H'
+        // TESTE: Simula o jogador tomando 1 de dano
         if (Input.GetKeyDown(KeyCode.H))
         {
             TakeDamage(1);
@@ -99,17 +133,14 @@ public class PlayerMovement : MonoBehaviour
         if (currentHealth <= 0)
         {
             Debug.Log("Game Over! Reiniciando cena...");
-            // Futuramente, recarregaremos a cena aqui.
             SceneManager.LoadScene("MenuPrincipal");
         }
     }
 
     private void UpdateHealthUI()
     {
-        // Passa por todos os corações na tela
         for (int i = 0; i < coracoesUI.Length; i++)
         {
-            // Se o índice do coração for menor que a vida atual, ele fica aceso. Se não, apaga.
             if (i < currentHealth)
             {
                 coracoesUI[i].SetActive(true);
@@ -121,7 +152,7 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    // --- FUNÇÕES ANTIGAS ---
+    // --- FUNÇÕES DE AÇÃO ---
     private IEnumerator DashRoutine()
     {
         canDash = false;
@@ -180,7 +211,6 @@ public class PlayerMovement : MonoBehaviour
     {
         if (projetilPrefab != null)
         {
-            // Cria o cubo na posição do jogador, apontando para a direção do último movimento
             Instantiate(projetilPrefab, transform.position + Vector3.up, Quaternion.LookRotation(lastDirection));
             Debug.Log("Atirou o cubo verde!");
         }
